@@ -224,44 +224,52 @@
 <div id="container"></div>
 
 <div id="controls">
-    <h2>学术网络分析</h2>
-    
+    <h2 id="panelTitle">学术网络分析</h2>
+
     <div class="control-group">
-        <label>数据源 (上传 .graphml 文件)</label>
+        <label id="languageLabel">语言 (Language)</label>
+        <select id="languageSelector" class="btn">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label id="fileLabel">数据源 (上传 .graphml 文件)</label>
         <input type="file" id="fileInput" accept=".graphml,.xml">
     </div>
 
     <!-- 网络过滤 (新增) -->
     <div class="control-group">
-        <label>网络结构过滤</label>
+        <label id="filterTitle">网络结构过滤</label>
         <div class="checkbox-container">
             <input type="checkbox" id="filterIsolatesCheck">
-            <span>仅显示主干网络 (过滤孤岛)</span>
+            <span id="filterCheckboxText">仅显示主干网络 (过滤孤岛)</span>
         </div>
-        <div style="font-size:10px; color:#999; margin-left:22px;">只保留节点数最多的连通区域</div>
+        <div id="filterNote" style="font-size:10px; color:#999; margin-left:22px;">只保留节点数最多的连通区域</div>
     </div>
 
     <div class="control-group">
-        <label>布局模式 (Layout)</label>
+        <label id="layoutLabel">布局模式 (Layout)</label>
         <select id="layoutSelector" class="btn">
-            <option value="force">力导向 (紧凑聚类)</option>
-            <option value="radial">圆形 (按年份排序)</option>
-            <option value="radial_freq">圆形 (按引用频率排序)</option>
+            <option value="force" id="layoutForceOption">力导向 (紧凑聚类)</option>
+            <option value="radial" id="layoutRadialOption">圆形 (按年份排序)</option>
+            <option value="radial_freq" id="layoutRadialFreqOption">圆形 (按引用频率排序)</option>
         </select>
     </div>
 
     <!-- 节点标签设置 -->
     <div class="control-group">
-        <label>节点标签 (Labels)</label>
+        <label id="labelsLabel">节点标签 (Labels)</label>
         <div class="checkbox-container">
             <input type="checkbox" id="showLabelsCheck" checked>
-            <span>显示标签 {Author}({Year})</span>
+            <span id="showLabelsText">显示标签 {Author}({Year})</span>
         </div>
         
         <div id="labelFilters">
             <select id="labelFilterMode" class="btn" style="margin-bottom:8px; font-size:12px; padding: 5px;">
-                <option value="minFreq">模式：按最小 Freq 筛选</option>
-                <option value="topN">模式：按 Freq 排名 (Top N)</option>
+                <option value="minFreq" id="labelModeMinOption">模式：按最小 Freq 筛选</option>
+                <option value="topN" id="labelModeTopOption">模式：按 Freq 排名 (Top N)</option>
             </select>
             
             <input type="range" id="labelSlider" class="slider" style="width:100%">
@@ -274,25 +282,25 @@
 
     <!-- 节点大小设置 -->
     <div class="control-group">
-        <label>节点大小模式</label>
+        <label id="sizeModeLabel">节点大小模式</label>
         <select id="sizeModeSelector" class="btn">
-            <option value="relative">相对 (归一化)</option>
-            <option value="absolute">绝对 (Freq数值)</option>
+            <option value="relative" id="sizeModeRelative">相对 (归一化)</option>
+            <option value="absolute" id="sizeModeAbsolute">绝对 (Freq数值)</option>
         </select>
     </div>
 
     <div class="control-group">
-        <label>基础大小 (Base Size): <span id="baseSizeLabel" style="color:#3498db">4px</span></label>
+        <label><span id="baseSizeText">基础大小 (Base Size):</span> <span id="baseSizeLabel" style="color:#3498db">4px</span></label>
         <input type="range" min="1" max="20" value="4" class="slider" id="baseSizeSlider" style="width:100%">
     </div>
 
     <div class="control-group">
-        <label>力导向参数 (排斥力)</label>
+        <label id="chargeLabel">力导向参数 (排斥力)</label>
         <input type="range" min="-500" max="0" value="-50" class="slider" id="chargeSlider" style="width:100%">
     </div>
 
     <div class="control-group">
-        <button class="btn" onclick="resetZoom()">重置视图</button>
+        <button class="btn" id="resetButton" onclick="resetZoom()">重置视图</button>
     </div>
 
     <div class="stats" id="graphStats">
@@ -301,7 +309,7 @@
     </div>
 
     <div id="legend">
-        <label>年份分布 (节点颜色)</label>
+        <label id="legendTitle">年份分布 (节点颜色)</label>
         <div class="gradient-bar"></div>
         <div class="legend-labels">
             <span id="year-min">早</span>
@@ -336,13 +344,97 @@
     const config = {
         layout: 'force',
         charge: -50,
-        sizeMode: 'relative', 
+        sizeMode: 'relative',
         baseSize: 4,
         showLabels: true,
         labelMode: 'minFreq',
         labelValue: 1,
         filterIsolates: false // 是否只显示主干网络
     };
+
+    // 语言文案
+    const translations = {
+        zh: {
+            documentTitle: "学术文献网络可视化 (GraphML Viewer)",
+            panelTitle: "学术网络分析",
+            languageLabel: "语言 (Language)",
+            fileLabel: "数据源 (上传 .graphml 文件)",
+            filterTitle: "网络结构过滤",
+            filterCheckboxText: "仅显示主干网络 (过滤孤岛)",
+            filterNote: "只保留节点数最多的连通区域",
+            layoutLabel: "布局模式 (Layout)",
+            layoutForce: "力导向 (紧凑聚类)",
+            layoutRadial: "圆形 (按年份排序)",
+            layoutRadialFreq: "圆形 (按引用频率排序)",
+            labelsLabel: "节点标签 (Labels)",
+            showLabelsText: "显示标签 {Author}({Year})",
+            labelModeMin: "模式：按最小 Freq 筛选",
+            labelModeTop: "模式：按 Freq 排名 (Top N)",
+            labelSliderMin: "最小 Freq:",
+            labelSliderTop: "Top N:",
+            sizeModeLabel: "节点大小模式",
+            sizeModeRelative: "相对 (归一化)",
+            sizeModeAbsolute: "绝对 (Freq数值)",
+            baseSizeText: "基础大小 (Base Size):",
+            chargeLabel: "力导向参数 (排斥力)",
+            resetButton: "重置视图",
+            statsPlaceholder: "请上传数据或使用默认演示数据。<br>节点: 0 | 边: 0",
+            statsTitle: "数据统计",
+            statsMainSuffix: " (主干)",
+            statsNodesLabel: "节点数量",
+            statsLinksLabel: "连接数量",
+            legendTitle: "年份分布 (节点颜色)",
+            yearEarly: "早",
+            yearLate: "晚",
+            tooltipYear: "年份",
+            tooltipFreq: "引用/频率",
+            tooltipJournal: "期刊",
+            tooltipUnknownYear: "未知",
+            tooltipNA: "N/A",
+            parseError: "文件解析失败"
+        },
+        en: {
+            documentTitle: "GraphML Viewer - Academic Network Visualization",
+            panelTitle: "Academic Network Analysis",
+            languageLabel: "Language",
+            fileLabel: "Data Source (upload .graphml)",
+            filterTitle: "Network Filtering",
+            filterCheckboxText: "Show main component only (hide isolates)",
+            filterNote: "Keeps only the largest connected component",
+            layoutLabel: "Layout",
+            layoutForce: "Force-directed (clustered)",
+            layoutRadial: "Radial (by year)",
+            layoutRadialFreq: "Radial (by frequency)",
+            labelsLabel: "Node Labels",
+            showLabelsText: "Show labels {Author}({Year})",
+            labelModeMin: "Mode: Min Freq",
+            labelModeTop: "Mode: Top-N Freq",
+            labelSliderMin: "Min Freq:",
+            labelSliderTop: "Top N:",
+            sizeModeLabel: "Node Size Mode",
+            sizeModeRelative: "Relative (normalized)",
+            sizeModeAbsolute: "Absolute (Freq value)",
+            baseSizeText: "Base Size:",
+            chargeLabel: "Force charge (repulsion)",
+            resetButton: "Reset view",
+            statsPlaceholder: "Upload data or use the demo dataset.<br>Nodes: 0 | Edges: 0",
+            statsTitle: "Data Summary",
+            statsMainSuffix: " (Main)",
+            statsNodesLabel: "Nodes",
+            statsLinksLabel: "Edges",
+            legendTitle: "Year distribution (node color)",
+            yearEarly: "Early",
+            yearLate: "Late",
+            tooltipYear: "Year",
+            tooltipFreq: "Frequency",
+            tooltipJournal: "Journal",
+            tooltipUnknownYear: "Unknown",
+            tooltipNA: "N/A",
+            parseError: "File parsing failed"
+        }
+    };
+
+    let currentLang = 'zh';
 
     const colorScale = d3.scaleSequential(d3.interpolateRdYlBu).domain([2025, 2000]); 
 
@@ -355,9 +447,72 @@
     let rawGraphData = { nodes: [], links: [] };
     // renderGraphData 保存当前用于渲染的数据（可能是过滤后的子集）
     let renderGraphData = { nodes: [], links: [] };
-    
+
     // 修复：使用全局 Set 来管理当前可见的标签 ID
     let currentVisibleLabelIds = new Set();
+
+    function setGraphStats(data) {
+        const statsEl = document.getElementById("graphStats");
+        const t = translations[currentLang];
+
+        if (!data || !data.nodes || data.nodes.length === 0) {
+            statsEl.innerHTML = t.statsPlaceholder;
+            return;
+        }
+
+        statsEl.innerHTML = `
+            <strong>${t.statsTitle}${config.filterIsolates ? t.statsMainSuffix : ""}</strong><br>
+            ${t.statsNodesLabel}: ${data.nodes.length}<br>
+            ${t.statsLinksLabel}: ${data.links.length}
+        `;
+    }
+
+    function updateLabelSliderTitle() {
+        const titleSpan = document.getElementById("labelSliderTitle");
+        const t = translations[currentLang];
+        titleSpan.innerText = config.labelMode === 'minFreq' ? t.labelSliderMin : t.labelSliderTop;
+    }
+
+    function applyTranslations() {
+        const t = translations[currentLang];
+
+        document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+        document.title = t.documentTitle;
+
+        document.getElementById("panelTitle").innerText = t.panelTitle;
+        document.getElementById("languageLabel").innerText = t.languageLabel;
+        document.getElementById("fileLabel").innerText = t.fileLabel;
+        document.getElementById("filterTitle").innerText = t.filterTitle;
+        document.getElementById("filterCheckboxText").innerText = t.filterCheckboxText;
+        document.getElementById("filterNote").innerText = t.filterNote;
+
+        document.getElementById("layoutLabel").innerText = t.layoutLabel;
+        document.getElementById("layoutForceOption").innerText = t.layoutForce;
+        document.getElementById("layoutRadialOption").innerText = t.layoutRadial;
+        document.getElementById("layoutRadialFreqOption").innerText = t.layoutRadialFreq;
+
+        document.getElementById("labelsLabel").innerText = t.labelsLabel;
+        document.getElementById("showLabelsText").innerText = t.showLabelsText;
+        document.getElementById("labelModeMinOption").innerText = t.labelModeMin;
+        document.getElementById("labelModeTopOption").innerText = t.labelModeTop;
+
+        document.getElementById("sizeModeLabel").innerText = t.sizeModeLabel;
+        document.getElementById("sizeModeRelative").innerText = t.sizeModeRelative;
+        document.getElementById("sizeModeAbsolute").innerText = t.sizeModeAbsolute;
+        document.getElementById("baseSizeText").innerText = t.baseSizeText;
+        document.getElementById("chargeLabel").innerText = t.chargeLabel;
+        document.getElementById("resetButton").innerText = t.resetButton;
+
+        document.getElementById("legendTitle").innerText = t.legendTitle;
+        const yearMinEl = document.getElementById("year-min");
+        const yearMaxEl = document.getElementById("year-max");
+        if (isNaN(Number(yearMinEl.textContent))) yearMinEl.innerText = t.yearEarly;
+        if (isNaN(Number(yearMaxEl.textContent))) yearMaxEl.innerText = t.yearLate;
+
+        languageSelector.value = currentLang;
+        updateLabelSliderTitle();
+        setGraphStats(renderGraphData);
+    }
 
     // --- 2. 演示数据 ---
     const demoGraphML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -537,11 +692,7 @@
         
         g.selectAll("*").remove(); // 清空画布
 
-        d3.select("#graphStats").html(`
-            <strong>数据统计${config.filterIsolates ? " (主干)" : ""}:</strong><br>
-            节点数量: ${data.nodes.length}<br>
-            连接数量: ${data.links.length}
-        `);
+        setGraphStats(data);
 
         // 初始化 Label Slider 范围
         const minFreq = d3.min(data.nodes, d => d.freq) || 1;
@@ -662,16 +813,16 @@
             // 保持当前值，除非超出范围
             if (+slider.value < min || +slider.value > max) slider.value = min;
             config.labelValue = +slider.value;
-            
-            titleSpan.innerText = "最小 Freq:";
+
+            titleSpan.innerText = translations[currentLang].labelSliderMin;
             valSpan.innerText = config.labelValue;
         } else {
             slider.min = 0;
             slider.max = renderGraphData.nodes.length;
             slider.value = Math.min(10, renderGraphData.nodes.length);
             config.labelValue = +slider.value;
-            
-            titleSpan.innerText = "Top N:";
+
+            titleSpan.innerText = translations[currentLang].labelSliderTop;
             valSpan.innerText = config.labelValue;
         }
     }
@@ -768,6 +919,13 @@
 
     // --- 交互事件监听 ---
 
+    const languageSelector = document.getElementById('languageSelector');
+    languageSelector.addEventListener('change', function(e) {
+        currentLang = e.target.value;
+        applyTranslations();
+        document.getElementById('labelSliderVal').innerText = config.labelValue;
+    });
+
     document.getElementById('filterIsolatesCheck').addEventListener('change', function(e) {
         config.filterIsolates = e.target.checked;
         processDataAndRender();
@@ -817,6 +975,8 @@
         }
     });
 
+    applyTranslations();
+
     document.getElementById('fileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -827,7 +987,7 @@
                 rawGraphData = parsed; // 保存全局原始数据
                 processDataAndRender(); // 进入渲染流
             } catch (err) {
-                alert("文件解析失败");
+                alert(translations[currentLang].parseError);
                 console.error(err);
             }
         };
@@ -835,13 +995,16 @@
     });
 
     function handleMouseOver(event, d) {
+        const t = translations[currentLang];
+        const yearText = d.year && d.year !== 0 ? d.year : t.tooltipUnknownYear;
+        const journalText = d.so || t.tooltipNA;
         const tooltip = d3.select("#tooltip");
         tooltip.transition().duration(200).style("opacity", .9);
         tooltip.html(`
             <strong>${d.name}</strong>
-            年份: ${d.year || "未知"}<br>
-            引用/频率: ${d.freq}<br>
-            期刊: ${d.so || "N/A"}<br>
+            ${t.tooltipYear}: ${yearText}<br>
+            ${t.tooltipFreq}: ${d.freq}<br>
+            ${t.tooltipJournal}: ${journalText}<br>
             <div style="margin-top:5px; font-size:10px; color:#aaa; border-top:1px solid #444; padding-top:2px;">${d.label}</div>
         `)
         .style("left", (event.pageX + 15) + "px")
