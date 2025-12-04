@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学术文献网络可视化 (GraphML Viewer)</title>
+    <!-- 使用 cdnjs 并添加 crossorigin 属性以解决 Script error 问题 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* 控制面板样式 */
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10;
+            width: 300px;
+            border: 1px solid #ddd;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+            border-bottom: 1px dashed #eee;
+            padding-bottom: 10px;
+        }
+        
+        .control-group:last-child {
+            border-bottom: none;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 12px;
+            color: #666;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            font-size: 12px;
+        }
+
+        .btn, select.btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        select.btn {
+            background-color: #fff;
+            color: #333;
+            border: 1px solid #ccc;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007CB2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right .7em top 50%;
+            background-size: .65em auto;
+        }
+
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        
+        select.btn:hover {
+            border-color: #3498db;
+            background-color: #fff;
+        }
+
+        .stats {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 10px;
+            line-height: 1.6;
+        }
+
+        /* 图例样式 */
+        #legend {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .gradient-bar {
+            height: 10px;
+            width: 100%;
+            background: linear-gradient(to right, #4575b4, #91bfdb, #fee090, #fc8d59, #d73027);
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #666;
+        }
+
+        /* Tooltip 样式 */
+        .tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 12px;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 300px;
+            line-height: 1.4;
+            z-index: 20;
+        }
+
+        .tooltip strong {
+            color: #3498db;
+            font-size: 14px;
+            display: block;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 4px;
+        }
+
+        /* D3 元素样式 */
+        .links line {
+            stroke: #bbb;
+            stroke-opacity: 0.4;
+            transition: stroke-opacity 0.2s;
+        }
+
+        .nodes circle {
+            stroke: #fff;
+            stroke-width: 1.5px;
+            cursor: grab;
+            transition: opacity 0.2s, stroke-width 0.2s, r 0.3s;
+        }
+
+        .nodes circle:active {
+            cursor: grabbing;
+        }
+
+        /* 标签样式 */
+        .node-labels text {
+            font-family: sans-serif;
+            font-size: 10px;
+            pointer-events: none;
+            text-shadow: 
+                -1px -1px 0 #fff,  
+                 1px -1px 0 #fff,
+                -1px  1px 0 #fff,
+                 1px  1px 0 #fff;
+            fill: #333;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .node-labels text.visible {
+            opacity: 1;
+        }
+
+        /* 状态类 */
+        .faded {
+            opacity: 0.05 !important;
+        }
+        .highlight {
+            opacity: 1 !important;
+            stroke: #333 !important;
+            stroke-width: 2px !important;
+        }
+        .link-highlight {
+            stroke: #555 !important;
+            stroke-opacity: 0.8 !important;
+        }
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .checkbox-container input {
+            width: auto;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<div id="controls">
+    <h2>学术网络分析</h2>
+    
+    <div class="control-group">
+        <label>数据源 (上传 .graphml 文件)</label>
+        <input type="file" id="fileInput" accept=".graphml,.xml">
+    </div>
+
+    <!-- 网络过滤 (新增) -->
+    <div class="control-group">
+        <label>网络结构过滤</label>
+        <div class="checkbox-container">
+            <input type="checkbox" id="filterIsolatesCheck">
+            <span>仅显示主干网络 (过滤孤岛)</span>
+        </div>
+        <div style="font-size:10px; color:#999; margin-left:22px;">只保留节点数最多的连通区域</div>
+    </div>
+
+    <div class="control-group">
+        <label>布局模式 (Layout)</label>
+        <select id="layoutSelector" class="btn">
+            <option value="force">力导向 (紧凑聚类)</option>
+            <option value="radial">圆形 (按年份排序)</option>
+            <option value="radial_freq">圆形 (按引用频率排序)</option>
+        </select>
+    </div>
+
+    <!-- 节点标签设置 -->
+    <div class="control-group">
+        <label>节点标签 (Labels)</label>
+        <div class="checkbox-container">
+            <input type="checkbox" id="showLabelsCheck" checked>
+            <span>显示标签 {Author}({Year})</span>
+        </div>
+        
+        <div id="labelFilters">
+            <select id="labelFilterMode" class="btn" style="margin-bottom:8px; font-size:12px; padding: 5px;">
+                <option value="minFreq">模式：按最小 Freq 筛选</option>
+                <option value="topN">模式：按 Freq 排名 (Top N)</option>
+            </select>
+            
+            <input type="range" id="labelSlider" class="slider" style="width:100%">
+            <div style="display:flex; justify-content:space-between; margin-top:2px;">
+                <span id="labelSliderTitle" style="font-size:10px; color:#666;">最小 Freq:</span>
+                <span id="labelSliderVal" style="font-size:10px; color:#3498db; font-weight:bold;">1</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 节点大小设置 -->
+    <div class="control-group">
+        <label>节点大小模式</label>
+        <select id="sizeModeSelector" class="btn">
+            <option value="relative">相对 (归一化)</option>
+            <option value="absolute">绝对 (Freq数值)</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>基础大小 (Base Size): <span id="baseSizeLabel" style="color:#3498db">4px</span></label>
+        <input type="range" min="1" max="20" value="4" class="slider" id="baseSizeSlider" style="width:100%">
+    </div>
+
+    <div class="control-group">
+        <label>力导向参数 (排斥力)</label>
+        <input type="range" min="-500" max="0" value="-50" class="slider" id="chargeSlider" style="width:100%">
+    </div>
+
+    <div class="control-group">
+        <button class="btn" onclick="resetZoom()">重置视图</button>
+    </div>
+
+    <div class="stats" id="graphStats">
+        请上传数据或使用默认演示数据。<br>
+        节点: 0 | 边: 0
+    </div>
+
+    <div id="legend">
+        <label>年份分布 (节点颜色)</label>
+        <div class="gradient-bar"></div>
+        <div class="legend-labels">
+            <span id="year-min">早</span>
+            <span id="year-max">晚</span>
+        </div>
+    </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+    // --- 1. 初始化设置 ---
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const svg = d3.select("#container").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .style("background-color", "#f8f9fa");
+
+    const g = svg.append("g");
+
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 8])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+    svg.call(zoom);
+
+    // 全局配置对象
+    const config = {
+        layout: 'force',
+        charge: -50,
+        sizeMode: 'relative', 
+        baseSize: 4,
+        showLabels: true,
+        labelMode: 'minFreq',
+        labelValue: 1,
+        filterIsolates: false // 是否只显示主干网络
+    };
+
+    const colorScale = d3.scaleSequential(d3.interpolateRdYlBu).domain([2025, 2000]); 
+
+    let simulation = null;
+    let linkElements = null;
+    let nodeElements = null;
+    let labelElements = null;
+    
+    // rawGraphData 保存原始完整数据
+    let rawGraphData = { nodes: [], links: [] };
+    // renderGraphData 保存当前用于渲染的数据（可能是过滤后的子集）
+    let renderGraphData = { nodes: [], links: [] };
+    
+    // 修复：使用全局 Set 来管理当前可见的标签 ID
+    let currentVisibleLabelIds = new Set();
+
+    // --- 2. 演示数据 ---
+    const demoGraphML = `<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+<key id="name" for="node" attr.name="name" attr.type="string"/>
+<key id="author" for="node" attr.name="author" attr.type="string"/>
+<key id="label" for="node" attr.name="label" attr.type="string"/>
+<key id="year" for="node" attr.name="year" attr.type="string"/>
+<key id="freq" for="node" attr.name="freq" attr.type="integer"/>
+<graph edgedefault="undirected">
+<node id="0"><data key="name">Node A</data><data key="year">2018</data><data key="freq">10</data></node>
+<node id="1"><data key="name">Node B</data><data key="year">2019</data><data key="freq">8</data></node>
+<node id="2"><data key="name">Node C</data><data key="year">2020</data><data key="freq">5</data></node>
+<node id="3"><data key="name">Island 1</data><data key="year">2015</data><data key="freq">2</data></node>
+<node id="4"><data key="name">Island 2</data><data key="year">2016</data><data key="freq">2</data></node>
+<edge source="0" target="1"></edge>
+<edge source="1" target="2"></edge>
+<edge source="3" target="4"></edge>
+</graph></graphml>`;
+
+    // --- 3. 核心逻辑：数据解析与处理 ---
+    
+    function parseGraphML(xmlString) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        
+        const nodes = [];
+        const links = [];
+        const nodeMap = new Map();
+
+        const keys = {};
+        xmlDoc.querySelectorAll("key").forEach(key => {
+            keys[key.getAttribute("id")] = key.getAttribute("attr.name");
+        });
+
+        xmlDoc.querySelectorAll("node").forEach(node => {
+            const id = node.getAttribute("id");
+            const data = {};
+            
+            node.querySelectorAll("data").forEach(d => {
+                const keyId = d.getAttribute("key");
+                const attrName = keys[keyId] || keyId;
+                let val = d.textContent;
+                if (attrName === 'freq' || attrName === 'year') {
+                    const num = parseInt(val);
+                    if (!isNaN(num)) val = num;
+                }
+                data[attrName] = val;
+            });
+
+            const nodeObj = {
+                id: id,
+                name: data.name || id,
+                author: data.author || data.name || id,
+                label: data.label || data.name || id,
+                year: data.year || 0,
+                freq: data.freq || 1,
+                so: data.so || "Unknown",
+                ...data
+            };
+            
+            nodes.push(nodeObj);
+            nodeMap.set(id, nodeObj);
+        });
+
+        xmlDoc.querySelectorAll("edge").forEach(edge => {
+            const source = edge.getAttribute("source");
+            const target = edge.getAttribute("target");
+            
+            if (nodeMap.has(source) && nodeMap.has(target)) {
+                const data = {};
+                edge.querySelectorAll("data").forEach(d => {
+                    const keyId = d.getAttribute("key");
+                    const attrName = keys[keyId] || keyId;
+                    data[attrName] = d.textContent;
+                });
+
+                links.push({
+                    source: source,
+                    target: target,
+                    weight: parseFloat(data.weight) || 1,
+                    // 注意：这里我们暂时存储字符串 ID，D3 仿真时会将其替换为对象引用
+                    // 但我们需要保留原始 ID 以便重新过滤
+                    _sourceId: source, 
+                    _targetId: target,
+                    ...data
+                });
+            }
+        });
+
+        return { nodes, links };
+    }
+
+    // --- 查找最大连通子图 (主干网络) ---
+    function getMainComponent(nodes, links) {
+        if (nodes.length === 0) return { nodes: [], links: [] };
+
+        // 1. 构建邻接表
+        const adj = new Map();
+        nodes.forEach(n => adj.set(n.id, []));
+        links.forEach(l => {
+            // 兼容 D3 处理前后的 link 数据 (字符串ID 或 对象引用)
+            const sId = l._sourceId || (typeof l.source === 'object' ? l.source.id : l.source);
+            const tId = l._targetId || (typeof l.target === 'object' ? l.target.id : l.target);
+            
+            if (adj.has(sId) && adj.has(tId)) {
+                adj.get(sId).push(tId);
+                adj.get(tId).push(sId);
+            }
+        });
+
+        // 2. BFS/DFS 寻找所有连通分量
+        const visited = new Set();
+        let largestComponentIds = new Set();
+
+        for (const node of nodes) {
+            if (!visited.has(node.id)) {
+                const componentIds = new Set();
+                const stack = [node.id];
+                visited.add(node.id);
+                componentIds.add(node.id);
+
+                while (stack.length > 0) {
+                    const u = stack.pop();
+                    const neighbors = adj.get(u) || [];
+                    for (const v of neighbors) {
+                        if (!visited.has(v)) {
+                            visited.add(v);
+                            componentIds.add(v);
+                            stack.push(v);
+                        }
+                    }
+                }
+
+                if (componentIds.size > largestComponentIds.size) {
+                    largestComponentIds = componentIds;
+                }
+            }
+        }
+
+        // 3. 过滤节点和连线
+        const filteredNodes = nodes.filter(n => largestComponentIds.has(n.id));
+        const filteredLinks = links.filter(l => {
+            const sId = l._sourceId || (typeof l.source === 'object' ? l.source.id : l.source);
+            const tId = l._targetId || (typeof l.target === 'object' ? l.target.id : l.target);
+            return largestComponentIds.has(sId) && largestComponentIds.has(tId);
+        });
+
+        return { nodes: filteredNodes, links: filteredLinks };
+    }
+
+    // --- 4. 数据处理与渲染流程 ---
+
+    function processDataAndRender() {
+        // 1. 根据过滤设置准备数据
+        let dataToRender;
+        
+        if (config.filterIsolates) {
+            // 获取主干网络
+            dataToRender = getMainComponent(rawGraphData.nodes, rawGraphData.links);
+        } else {
+            // 使用全部数据
+            // 注意：这里我们需要创建浅拷贝，特别是 links，因为 D3 会修改 source/target
+            // 如果不拷贝，来回切换会导致 D3 引用混乱
+            dataToRender = {
+                nodes: rawGraphData.nodes, // 节点对象复用以保持位置
+                links: rawGraphData.links.map(l => ({...l})) // 连线必须新建对象，否则 D3 会覆盖原始 ID
+            };
+        }
+
+        render(dataToRender);
+    }
+
+    // --- 5. 渲染图表 ---
+    function render(data) {
+        renderGraphData = data; // 保存当前渲染集供交互使用
+        
+        g.selectAll("*").remove(); // 清空画布
+
+        d3.select("#graphStats").html(`
+            <strong>数据统计${config.filterIsolates ? " (主干)" : ""}:</strong><br>
+            节点数量: ${data.nodes.length}<br>
+            连接数量: ${data.links.length}
+        `);
+
+        // 初始化 Label Slider 范围
+        const minFreq = d3.min(data.nodes, d => d.freq) || 1;
+        const maxFreq = d3.max(data.nodes, d => d.freq) || 10;
+        initLabelControls(minFreq, maxFreq);
+
+        // 更新颜色比例尺
+        const years = data.nodes.map(d => d.year).filter(y => y > 1900);
+        if (years.length > 0) {
+            const minYear = d3.min(years);
+            const maxYear = d3.max(years);
+            colorScale.domain([maxYear, minYear]);
+            d3.select("#year-min").text(minYear);
+            d3.select("#year-max").text(maxYear);
+        }
+        
+        // 绘制连线
+        linkElements = g.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(data.links)
+            .join("line")
+            .attr("stroke-width", d => Math.min(Math.sqrt(d.weight || 1), 3));
+
+        // 绘制节点
+        nodeElements = g.append("g")
+            .attr("class", "nodes")
+            .selectAll("circle")
+            .data(data.nodes, d => d.id) // 使用 ID 作为 Key，确保切换数据时尽可能保留状态
+            .join("circle")
+            .attr("r", d => calculateNodeRadius(d)) 
+            .attr("fill", d => {
+                if (!d.year || d.year < 1900) return "#ccc";
+                return colorScale(d.year);
+            })
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        // 绘制标签
+        labelElements = g.append("g")
+            .attr("class", "node-labels")
+            .selectAll("text")
+            .data(data.nodes, d => d.id)
+            .join("text")
+            .text(d => {
+                const name = d.author || d.name;
+                const year = (d.year && d.year > 1900) ? `(${d.year})` : "";
+                return `${name}${year}`;
+            })
+            .attr("x", 8)
+            .attr("y", 3);
+
+        nodeElements
+            .on("mouseover", handleMouseOver)
+            .on("mouseout", handleMouseOut);
+
+        // 初始化布局
+        updateLayout(config.layout);
+        updateLabels(); 
+    }
+
+    // --- 节点大小 ---
+    function calculateNodeRadius(d) {
+        const base = config.baseSize;
+        const freq = d.freq || 1;
+
+        if (config.sizeMode === 'absolute') {
+            return base + freq;
+        } else {
+            // 基于原始数据的全集来计算比例，这样切换过滤时节点大小不会突变
+            const minFreq = d3.min(rawGraphData.nodes, n => n.freq) || 1;
+            const maxFreq = d3.max(rawGraphData.nodes, n => n.freq) || 10;
+            
+            const scale = d3.scaleSqrt()
+                .domain([minFreq, maxFreq])
+                .range([base, base * 4]);
+            
+            return scale(freq);
+        }
+    }
+
+    // --- 标签更新逻辑 (修复：使用全局 currentVisibleLabelIds) ---
+    function updateLabels() {
+        // 清空当前可见集合
+        currentVisibleLabelIds.clear();
+
+        if (!config.showLabels) {
+            labelElements.classed("visible", false);
+            return;
+        }
+
+        if (config.labelMode === 'minFreq') {
+            const threshold = config.labelValue;
+            renderGraphData.nodes.forEach(d => {
+                if (d.freq >= threshold) currentVisibleLabelIds.add(d.id);
+            });
+        } else {
+            const topN = config.labelValue;
+            const sortedNodes = [...renderGraphData.nodes].sort((a, b) => b.freq - a.freq);
+            const topNodes = sortedNodes.slice(0, topN);
+            topNodes.forEach(d => currentVisibleLabelIds.add(d.id));
+        }
+
+        // 根据集合设置可见性
+        labelElements.classed("visible", d => currentVisibleLabelIds.has(d.id));
+    }
+
+    function initLabelControls(min, max) {
+        const slider = document.getElementById("labelSlider");
+        const valSpan = document.getElementById("labelSliderVal");
+        const titleSpan = document.getElementById("labelSliderTitle");
+        
+        if (config.labelMode === 'minFreq') {
+            slider.min = min;
+            slider.max = max;
+            // 保持当前值，除非超出范围
+            if (+slider.value < min || +slider.value > max) slider.value = min;
+            config.labelValue = +slider.value;
+            
+            titleSpan.innerText = "最小 Freq:";
+            valSpan.innerText = config.labelValue;
+        } else {
+            slider.min = 0;
+            slider.max = renderGraphData.nodes.length;
+            slider.value = Math.min(10, renderGraphData.nodes.length);
+            config.labelValue = +slider.value;
+            
+            titleSpan.innerText = "Top N:";
+            valSpan.innerText = config.labelValue;
+        }
+    }
+
+    // --- 布局逻辑 ---
+    function initForceSimulation() {
+        if (simulation) simulation.stop();
+
+        simulation = d3.forceSimulation(renderGraphData.nodes)
+            .force("link", d3.forceLink(renderGraphData.links).id(d => d.id).distance(30))
+            .force("charge", d3.forceManyBody().strength(config.charge))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("radial", d3.forceRadial(Math.min(width, height) / 3, width / 2, height / 2).strength(0.05))
+            .force("collide", d3.forceCollide().radius(d => calculateNodeRadius(d) + 2).iterations(2));
+
+        simulation.on("tick", ticked);
+        simulation.alpha(1).restart();
+    }
+
+    function ticked() {
+        if (!linkElements || !nodeElements || !labelElements) return;
+
+        linkElements
+            .attr("x1", d => d.source ? d.source.x : 0)
+            .attr("y1", d => d.source ? d.source.y : 0)
+            .attr("x2", d => d.target ? d.target.x : 0)
+            .attr("y2", d => d.target ? d.target.y : 0);
+
+        nodeElements
+            .attr("cx", d => d.x || 0)
+            .attr("cy", d => d.y || 0);
+
+        labelElements
+            .attr("x", d => (d.x || 0) + calculateNodeRadius(d) + 2)
+            .attr("y", d => (d.y || 0) + 4);
+    }
+
+    function updateNodeAppearance() {
+        nodeElements.transition().duration(300)
+            .attr("r", d => calculateNodeRadius(d));
+        
+        if (simulation && config.layout === 'force') {
+            simulation.force("collide", d3.forceCollide().radius(d => calculateNodeRadius(d) + 2).iterations(2));
+            simulation.alpha(0.3).restart();
+        } else {
+            labelElements.transition().duration(300)
+                .attr("x", d => d.x + calculateNodeRadius(d) + 2);
+        }
+    }
+
+    function updateLayout(type) {
+        config.layout = type;
+        
+        if (type === 'force') {
+            initForceSimulation();
+        } else {
+            if (simulation) simulation.stop();
+
+            const nodes = renderGraphData.nodes;
+            if (type === 'radial') {
+                nodes.sort((a, b) => (a.year || 0) - (b.year || 0));
+            } else if (type === 'radial_freq') {
+                nodes.sort((a, b) => b.freq - a.freq);
+            }
+
+            const radius = Math.min(width, height) / 2 - 80;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const angleStep = (2 * Math.PI) / nodes.length;
+
+            nodes.forEach((d, i) => {
+                d.targetX = centerX + radius * Math.cos(i * angleStep);
+                d.targetY = centerY + radius * Math.sin(i * angleStep);
+            });
+
+            const t = d3.transition().duration(1000);
+
+            nodeElements.transition(t)
+                .attr("cx", d => d.targetX)
+                .attr("cy", d => d.targetY)
+                .on("end", function(d) { d.x = d.targetX; d.y = d.targetY; });
+
+            linkElements.transition(t)
+                .attr("x1", d => d.source.targetX)
+                .attr("y1", d => d.source.targetY)
+                .attr("x2", d => d.target.targetX)
+                .attr("y2", d => d.target.targetY);
+            
+            labelElements.transition(t)
+                .attr("x", d => d.targetX + calculateNodeRadius(d) + 2)
+                .attr("y", d => d.targetY + 4);
+        }
+    }
+
+    // --- 交互事件监听 ---
+
+    document.getElementById('filterIsolatesCheck').addEventListener('change', function(e) {
+        config.filterIsolates = e.target.checked;
+        processDataAndRender();
+    });
+
+    document.getElementById('layoutSelector').addEventListener('change', function(e) {
+        updateLayout(e.target.value);
+    });
+
+    document.getElementById('showLabelsCheck').addEventListener('change', function(e) {
+        config.showLabels = e.target.checked;
+        updateLabels();
+    });
+
+    document.getElementById('labelFilterMode').addEventListener('change', function(e) {
+        config.labelMode = e.target.value;
+        const minFreq = d3.min(renderGraphData.nodes, d => d.freq) || 1;
+        const maxFreq = d3.max(renderGraphData.nodes, d => d.freq) || 10;
+        initLabelControls(minFreq, maxFreq);
+        updateLabels();
+    });
+
+    document.getElementById('labelSlider').addEventListener('input', function(e) {
+        const val = +e.target.value;
+        config.labelValue = val;
+        document.getElementById('labelSliderVal').innerText = val;
+        updateLabels();
+    });
+
+    document.getElementById('sizeModeSelector').addEventListener('change', function(e) {
+        config.sizeMode = e.target.value;
+        updateNodeAppearance();
+    });
+
+    document.getElementById('baseSizeSlider').addEventListener('input', function(e) {
+        const val = +e.target.value;
+        config.baseSize = val;
+        document.getElementById('baseSizeLabel').innerText = val + "px";
+        updateNodeAppearance();
+    });
+
+    document.getElementById('chargeSlider').addEventListener('input', function(e) {
+        config.charge = +e.target.value;
+        if (simulation && config.layout === 'force') {
+            simulation.force("charge").strength(config.charge);
+            simulation.alpha(0.3).restart();
+        }
+    });
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const parsed = parseGraphML(e.target.result);
+                rawGraphData = parsed; // 保存全局原始数据
+                processDataAndRender(); // 进入渲染流
+            } catch (err) {
+                alert("文件解析失败");
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    function handleMouseOver(event, d) {
+        const tooltip = d3.select("#tooltip");
+        tooltip.transition().duration(200).style("opacity", .9);
+        tooltip.html(`
+            <strong>${d.name}</strong>
+            年份: ${d.year || "未知"}<br>
+            引用/频率: ${d.freq}<br>
+            期刊: ${d.so || "N/A"}<br>
+            <div style="margin-top:5px; font-size:10px; color:#aaa; border-top:1px solid #444; padding-top:2px;">${d.label}</div>
+        `)
+        .style("left", (event.pageX + 15) + "px")
+        .style("top", (event.pageY - 28) + "px");
+
+        const connectedNodeIds = new Set();
+        connectedNodeIds.add(d.id);
+        
+        renderGraphData.links.forEach(l => {
+            if (l.source.id === d.id) connectedNodeIds.add(l.target.id);
+            if (l.target.id === d.id) connectedNodeIds.add(l.source.id);
+        });
+
+        nodeElements.classed("faded", node => !connectedNodeIds.has(node.id));
+        linkElements.classed("faded", link => link.source.id !== d.id && link.target.id !== d.id);
+        linkElements.classed("link-highlight", link => link.source.id === d.id || link.target.id === d.id);
+        
+        // 修复：使用全局 currentVisibleLabelIds 判断可见性
+        labelElements.classed("visible", labelData => 
+            connectedNodeIds.has(labelData.id) || 
+            (config.showLabels && currentVisibleLabelIds.has(labelData.id))
+        );
+        
+        d3.select(this).classed("highlight", true);
+    }
+
+    function handleMouseOut() {
+        d3.select("#tooltip").transition().duration(500).style("opacity", 0);
+        nodeElements.classed("faded", false).classed("highlight", false);
+        linkElements.classed("faded", false).classed("link-highlight", false);
+        updateLabels(); // 恢复正常标签状态
+    }
+
+    function dragstarted(event, d) {
+        if (config.layout !== 'force') return;
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+        if (config.layout !== 'force') return;
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+
+    function dragended(event, d) {
+        if (config.layout !== 'force') return;
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+    }
+
+    function resetZoom() {
+        svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+    }
+
+    window.addEventListener('resize', () => {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        svg.attr("width", w).attr("height", h);
+        if(simulation) {
+            simulation.force("center", d3.forceCenter(w / 2, h / 2));
+            simulation.force("radial", d3.forceRadial(Math.min(w, h) / 3, w / 2, h / 2).strength(0.05));
+            if(config.layout === 'force') simulation.alpha(0.3).restart();
+        }
+    });
+
+    // 等待 DOM 完全加载后再初始化
+    window.onload = function() {
+        try {
+            rawGraphData = parseGraphML(demoGraphML);
+            processDataAndRender();
+        } catch (e) {
+            console.error("Initialization Error:", e);
+        }
+    };
+
+</script>
+</body>
+</html>
